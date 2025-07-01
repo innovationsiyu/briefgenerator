@@ -89,6 +89,24 @@ time_modifier_mapping = {
     '下': 1    # 下周
 }
 
+DATE_REFERENCE_PATTERN = re.compile(r'(今日|今天|明日|明天|昨日|昨天|前日|前天|后日|后天|大前天|大后天)')
+
+# 时间指代词映射
+date_reference_mapping = {
+    '今日': 0,
+    '今天': 0,
+    '明日': 1,
+    '明天': 1,
+    '昨日': -1,
+    '昨天': -1,
+    '前日': -1,
+    '前天': -2,
+    '后日': 1,
+    '后天': 2,
+    '大前天': -3,
+    '大后天': 3
+}
+
 def text_processor(text, reference_date=None):
     """
     处理文本，进行台湾媒体用语编辑和日期替换，并输出准确性检查意见
@@ -176,12 +194,40 @@ def text_processor(text, reference_date=None):
                 })
     
     result["processed_text"] = temp_processed_text_for_dates
+
+
+    current_text_for_date_ref = result["processed_text"]
+    date_ref_matches = list(DATE_REFERENCE_PATTERN.finditer(current_text_for_date_ref))
     
-    # 3.股票代码检测和移除（修正版）
-    # 修正：只有数字在四位及以上时才归类为股票代码
-    stock_code_pattern = r'(?:[A-Z]{1,5}\d{4,}|\d{5,6}\.(?:SH|SZ|HK)|[A-Z]{1,4}\.[A-Z]{1,3})'
+    # 从后往前处理，避免位置偏移问题
+    temp_processed_text_for_date_ref = current_text_for_date_ref
+    for match in reversed(date_ref_matches):
+        date_ref_word = match.group(1)
+        
+        if date_ref_word in date_reference_mapping:
+            days_offset = date_reference_mapping[date_ref_word]
+            target_date = reference_date + timedelta(days=days_offset)
+            
+            # 格式化日期，如"5月22日"
+            date_str = f"{target_date.month}月{target_date.day}日"
+            
+            # 在原文本后添加括号注释
+            original_text = match.group(0)
+            annotated_text = f"{original_text}({date_str})"
+            temp_processed_text_for_date_ref = temp_processed_text_for_date_ref[:match.start()] + annotated_text + temp_processed_text_for_date_ref[match.end():]
+            
+            result["modifications"].append({
+                "type": "date_reference_annotation",
+                "original": original_text,
+                "replacement": annotated_text
+            })
     
-    # 查找所有股票代码
+    result["processed_text"] = temp_processed_text_for_date_ref
+    
+    # 3.股票代码检测和移除
+    stock_code_pattern = r'(?:\d{4,6}\.(?:SH|SZ|HK)|[A-Z]{1,4}\.[A-Z]{1,3})'
+    
+    # 查找所有股票代码（仅支持A股、港股）
     stock_matches = list(re.finditer(stock_code_pattern, result["processed_text"]))
     
     # 记录修改并移除股票代码
@@ -264,7 +310,7 @@ def calculate_target_date(reference_date, target_weekday_num, time_modifier=None
 
 
 if __name__ == "__main__":
-    content = "周一，上证指数（000001.SH）的开盘价是3450点，收盘价是3455点。"
+    content = "今日，上证指数（000001.SH）的开盘价是3450点，收盘价是3455点。"
     result = text_processor(content)
     print(result)
 
