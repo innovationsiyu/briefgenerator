@@ -5,9 +5,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def interpret_article(
-        system_prompt: str,
-        processed_text: str) -> str:
+def interpret_article(processed_text: str) -> str:
     """
 
     参数:
@@ -24,7 +22,7 @@ def interpret_article(
         prompt_content = f.read()
 
     # 构造大模型输入
-    llm_input = f"{system_prompt}\n{prompt_content}\n{processed_text}"
+    llm_input = f"{n{prompt_content}\n{processed_text}"
 
     # 调用大模型
     article_interpretation = call_llm(llm_input)
