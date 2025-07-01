@@ -1,22 +1,52 @@
+import os
+os.environ["OPENROUTER_API_KEY"] = "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"
+import json
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 def interpret_article(
         system_prompt: str,
         processed_text: str) -> str:
     """
-    模拟大模型对文章的解读（实际调用大模型API的过程省略）
 
     参数:
         system_prompt (str): 系统级提示词，定义模型的角色和任务要求
-        user_prompt   (str): 用户提供的提示词，包含待解读的文章内容或具体要求
+        processed_text (str): 处理后的新闻文本
 
     返回:
-        article_interpretation: 模型生成的解读结果文本
+        article_interpretation: 模型生成的解读结果文本（json字符串）
     """
-    # return
+    from utils_penghan.utils import call_llm
 
+    # 读取 interpret_text.py 中的提示词
+    with open('prompt_panlin/interpret_text.py', 'r', encoding='utf-8') as f:
+        prompt_content = f.read()
 
-# 使用示例
+    # 构造大模型输入
+    llm_input = f"{system_prompt}\n{prompt_content}\n{processed_text}"
+
+    # 调用大模型
+    article_interpretation = call_llm(llm_input)
+
+    # 以json格式封装输出
+    output_json = json.dumps({"article_interpretation": article_interpretation}, ensure_ascii=False)
+
+    # 输出到指定文件
+    output_path = 'processes/processed_text/article_interpretation'
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(output_json)
+
+    return output_json
+
 if __name__ == "__main__":
-    interpret_article("system_prompt", "source_article")
+    # 读取处理后的新闻文本
+    with open('processes/processed_text.txt', 'r', encoding='utf-8') as f:
+        processed_text = f.read()
 
+    # 假设有一个系统提示词
+    system_prompt = "请解读以下新闻内容："
 
-#json格式不解析，直接把大语言模型的json解读当作一个整体输入给下一个环节
+    # 调用解读函数
+    result_json = interpret_article(system_prompt, processed_text)
+    print(result_json)  # 可选：打印到终端
