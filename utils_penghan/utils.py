@@ -1,12 +1,12 @@
 import os
+import re
 import time
 import requests
+import json
+from typing import Union, Dict, List
+from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
-
-# 添加调试代码
-api_key = os.getenv('OPENROUTER_API_KEY')
-print(f"API Key loaded: {api_key[:10]}..." if api_key else "API Key not found")
 
 
 def call_llm(prompt, model="deepseek/deepseek-chat-v3-0324", temperature=0.7, max_retries=3, retry_delay=1):
@@ -75,8 +75,198 @@ def call_llm(prompt, model="deepseek/deepseek-chat-v3-0324", temperature=0.7, ma
     raise Exception(f"重试 {max_retries} 次后仍然失败")
 
 
+def get_prompt(file_path: str) -> str:
+    """
+    从文件中读取提示内容
+    
+    Args:
+        file_path (str): 包含提示的文件路径
+    
+    Returns:
+        str: 从文件中读取的提示内容
+    """
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.read().strip()
+
+
+
+def parse_json(llm_output: str) -> Union[Dict, List]:
+    """
+    清理LLM输出的JSON字符串，返回纯净的Python字典或列表
+    
+    参数:
+        llm_output: LLM输出的可能包含JSON的字符串
+        
+    返回:
+        解析后的Python字典或列表
+        
+    异常:
+        ValueError: 当无法提取有效JSON时抛出
+    """
+    # 常见预处理步骤
+    cleaned = llm_output.strip()
+    
+    # 情况1：输出直接是JSON字符串（可能被Markdown代码块包裹）
+    json_patterns = [
+        r'```(?:json)?\n?(.*?)\n```',  # 匹配Markdown代码块
+        r'\{(.*)\}',                    # 匹配花括号内容
+        r'\[(.*)\]'                     # 匹配方括号内容
+    ]
+    
+    for pattern in json_patterns:
+        match = re.search(pattern, cleaned, re.DOTALL)
+        if match:
+            try:
+                # 提取最可能JSON部分
+                json_str = match.group(1) if match.groups() else match.group(0)
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                continue
+    
+    # 情况2：输出是纯JSON但没有代码块标记
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+    
+    # 情况3：输出包含JSON但可能有其他文本
+    # 尝试找到最长的可能JSON子串
+    json_candidates = []
+    for start in ['{', '[']:
+        for end in ['}', ']']:
+            start_idx = cleaned.find(start)
+            end_idx = cleaned.rfind(end)
+            if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+                candidate = cleaned[start_idx:end_idx+1]
+                try:
+                    parsed = json.loads(candidate)
+                    json_candidates.append((len(candidate), parsed))
+                except json.JSONDecodeError:
+                    continue
+    
+    if json_candidates:
+        # 返回最长的有效JSON
+        return max(json_candidates, key=lambda x: x[0])[1]
+    
+    # 如果所有尝试都失败
+    raise ValueError("无法从LLM输出中提取有效的JSON内容")
+
+
+def save_json_to_file(data, file_path, ensure_ascii=False, indent=2):
+    """
+    统一的JSON文件保存函数
+    
+    Args:
+        data: 要保存的数据
+        file_path: 文件路径
+        ensure_ascii: 是否确保ASCII编码，默认False
+        indent: 缩进空格数，默认2
+    """
+    # 确保目录存在
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=ensure_ascii, indent=indent)
+    
+    print(f"数据已保存到: {file_path}")
+
+
+def save_text_to_file(text, file_path):
+    """
+    统一的文本文件保存函数
+    
+    Args:
+        text: 要保存的文本内容
+        file_path: 文件路径
+    """
+    # 确保目录存在
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(text)
+    
+    print(f"文本已保存到: {file_path}")
+
+
+def count_chars(text):
+    """
+    统计字符数（可配置是否包含标点符号）
+    :param text: 输入字符串
+    :param include_punctuation: 是否包含标点符号
+    :return: 字符数量统计字典
+    """
+    # 使用Unicode编码表示中文标点
+    chinese_punct = (
+        "\uFF02\uFF03\uFF04\uFF05\uFF06\uFF07\uFF08\uFF09\uFF0A\uFF0B\uFF0C"
+        "\uFF0D\uFF0F\uFF1A\uFF1B\uFF1C\uFF1D\uFF1E\uFF20\uFF3B\uFF3C\uFF3D"
+        "\uFF3E\uFF3F\uFF40\uFF5B\uFF5C\uFF5D\uFF5E\uFF5F\uFF60\u3000\u3001"
+        "\u3002\u3008\u3009\u300A\u300B\u300C\u300D\u300E\u300F\u3010\u3011"
+        "\u3014\u3015\u3016\u3017\u3018\u3019\u301A\u301B\u301C\u301D\u301E"
+        "\u301F\u3030\u2013\u2014\u2018\u2019\u201C\u201D\u2026\u2027\uFE4F"
+        "\uFE50\uFE51\uFE52\uFF01\uFF1F"
+    )
+    
+    # 英文标点使用ASCII表示
+    english_punct = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+    
+    # 统计中文字符（Unicode范围：4E00-9FFF）
+    chinese_chars = re.findall(r"[\u4e00-\u9fa5]", text)
+    
+    # 统计英文单词（按空格分隔）
+    english_words = re.findall(r"[a-zA-Z]+", text)
+    
+    # 修改：统计数字和百分比为单个单位
+    # 匹配百分比（如：54.8%、100%、0.5%）
+    percentages = re.findall(r"\d+(?:\.\d+)?%", text)
+    
+    # 匹配小数（如：54.8、100.0、0.5）- 排除已匹配的百分比
+    temp_text = text
+    for percentage in percentages:
+        temp_text = temp_text.replace(percentage, "", 1)
+    decimals = re.findall(r"\d+\.\d+", temp_text)
+    
+    # 匹配整数（排除已匹配的百分比和小数）
+    for decimal in decimals:
+        temp_text = temp_text.replace(decimal, "", 1)
+    integers = re.findall(r"\d+", temp_text)
+    
+    # 统计标点符号（排除百分号，因为已在百分比中计算）
+    temp_text_for_punct = text
+    for percentage in percentages:
+        temp_text_for_punct = temp_text_for_punct.replace(percentage, "", 1)
+    punct_chars = re.findall(f"[{chinese_punct + english_punct}]", temp_text_for_punct)
+    
+    # 返回总字符数：中文字符 + 英文单词 + 百分比 + 小数 + 整数 + 标点符号
+    total_count = (
+        len(chinese_chars) + 
+        len(english_words) + 
+        len(percentages) + 
+        len(decimals) + 
+        len(integers) + 
+        len(punct_chars)
+    )
+    
+    return total_count
+
+
+
+"""
+解析JSON、
+解析XML、
+字数统计、
+字符串替换/去除、
+字符串替换/去除（正则表达式）、
+字符串拆分、
+星期日期替换、
+将输出保存为txt文件、
+管理线程
+"""
+
 
 # 使用示例
 if __name__ == "__main__":
-    result=call_llm(prompt="请介绍一下Python编程语言")
+    result=call_llm(prompt="请介绍一下json是什么，并为我提供一个json格式的例子")
     print(result)
+    result=parse_json(result)
+    print("==========")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
