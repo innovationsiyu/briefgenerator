@@ -4,7 +4,6 @@ import time
 import requests
 import json
 from typing import Union, Dict, List
-from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -152,6 +151,30 @@ def parse_json(llm_output: str) -> Union[Dict, List]:
     raise ValueError("无法从LLM输出中提取有效的JSON内容")
 
 
+def extract_xml_content(text: str, tag_name: str) -> str:
+    """
+    从文本中提取指定XML标签的内容
+    
+    参数:
+        text: 包含XML标签的文本
+        tag_name: 要提取的XML标签名称
+        
+    返回:
+        提取到的纯净字符串内容，如果未找到则返回空字符串
+    """
+    # 构建正则表达式模式，匹配开始和结束标签
+    pattern = re.compile(rf'<{tag_name}>(.*?)</{tag_name}>', re.DOTALL)
+    
+    # 搜索匹配的内容
+    match = pattern.search(text)
+    
+    if match:
+        # 返回匹配到的内容，去除前后空白
+        return match.group(1).strip()
+    return ""
+
+
+
 def save_json_to_file(data, file_path, ensure_ascii=False, indent=2):
     """
     统一的JSON文件保存函数
@@ -190,9 +213,8 @@ def save_text_to_file(text, file_path):
 
 def count_chars(text):
     """
-    统计字符数（可配置是否包含标点符号）
+    统计字符数
     :param text: 输入字符串
-    :param include_punctuation: 是否包含标点符号
     :return: 字符数量统计字典
     """
     # 使用Unicode编码表示中文标点
@@ -249,24 +271,27 @@ def count_chars(text):
     return total_count
 
 
+def split_sentences(text: str) -> list:
+    """
+    通过句号和换行符拆分文本为句子列表
+    
+    参数:
+        text: 要拆分的文本
+        
+    返回:
+        拆分后的句子列表，去除空字符串
+    """
+    # 使用正则表达式匹配一个或多个句号或换行符作为分隔符
+    sentences = re.split(r'[。？！!?\n]+', text)
+    
+    # 去除空字符串并返回
+    return [s.strip() for s in sentences if s.strip()]
 
-"""
-解析JSON、
-解析XML、
-字数统计、
-字符串替换/去除、
-字符串替换/去除（正则表达式）、
-字符串拆分、
-星期日期替换、
-将输出保存为txt文件、
-管理线程
-"""
+
 
 
 # 使用示例
 if __name__ == "__main__":
-    result=call_llm(prompt="请介绍一下json是什么，并为我提供一个json格式的例子")
+    result=split_sentences("这是第一句话!这是第二句话\n\n这是第三句话。这是第四句话")
     print(result)
-    result=parse_json(result)
-    print("==========")
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+
