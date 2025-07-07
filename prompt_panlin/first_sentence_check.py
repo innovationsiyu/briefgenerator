@@ -1,3 +1,4 @@
+
 def first_sentence_check_prompt(first_sentence, source_text, interpreted_source):
     return f"""
 # 简报第一句话检查指令
