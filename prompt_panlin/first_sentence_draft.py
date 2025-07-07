@@ -1,3 +1,4 @@
+
 def first_sentence_prompt(guidance):
     return f"""
 # 简报第一句话生成指令
@@ -124,15 +125,8 @@ g. 句子是否完整且无歧义？
 
 ## 输出格式要求
 
-#Output format
--xml
+### XML标签格式
+```xml
 <first_sentence>[生成的≤50字首句]</first_sentence>
--硬性要求：
-仅输出XML标签内容，无换行/附加说明
--示例：
-✓ <first_sentence>泰国陆军于6月23日晚发布声明，宣布关闭所有泰柬边境口岸，仅保留人道主义援助的酌情开放通道。</first_sentence>
-✓ <first_sentence>据路透社6月23日报道，中国汽车企业被曝通过出口"零公里二手车"虚增销量，这一灰色市场正获得地方政府支持。</first_sentence>
-"""
 
-if __name__ == "__main__":
-    print(fact_paragraph_prompt("这是一条指导意见。"))
+"""
