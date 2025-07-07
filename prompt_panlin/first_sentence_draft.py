@@ -1,4 +1,3 @@
-
 def first_sentence_prompt(guidance):
     return f"""
 # 简报第一句话生成指令
