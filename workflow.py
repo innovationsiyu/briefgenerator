@@ -2,8 +2,21 @@
 
 import asyncio
 import json
+import os
 from utils import convert_to_cn_term, convert_to_date, clean_stock_codes, get_prompt, call_llm, extract_with_xml, split_to_sentences, save_as_txt, remove_year_at_start
 
+def get_source_files() -> list[str]:
+    """
+    获取inputs文件夹中所有txt文件的文件名（不包含扩展名）
+    
+    Returns:
+        list[str]: 文件名列表
+    """
+    file_names = []
+    for filename in os.listdir("inputs"):
+        if filename.endswith('.txt'):
+            file_names.append(filename[:-4])
+    return file_names
 
 def get_source_text(file_name: str) -> str:
     """
@@ -226,36 +239,49 @@ async def translate_to_other_languages(brief_title: str, brief_content: str) -> 
         if brief_in_other_languages := extract_with_xml(llm_result, ["english_title", "english_content", "german_title", "german_content", "french_title", "french_content", "japanese_title", "japanese_content"]):
             return tuple(brief_in_other_languages)
 
-async def generate_brief(file_name: str) -> tuple[str, str]:
+async def generate_briefs() -> None:
     """
-    执行完整的简报生成工作流，并将结果保存到文件。
-    Args:
-        file_name (str): 输入文件名 (不包含.txt扩展名)。
+    执行完整的并行简报生成工作流，处理inputs文件夹中的所有txt文件
     Returns:
-        tuple[str, str]: 一个包含标题和简报正文的元组。
+        None
     """
-    print("1/6: 读取并解读原文")
-    source_text = get_source_text(file_name)
-    interpretation, published_date, opinion_or_requirement = await interpret_source_text(source_text)
-    interpretation = convert_to_date(interpretation, published_date)
-    source_text = convert_to_cn_term(source_text)
-    source_text = clean_stock_codes(source_text)
-    source_text = convert_to_date(source_text, published_date)
-    print("2/6: 创建并完善事实段落")
-    fact_paragraph = await draft_and_refine_fact_paragraph(source_text, interpretation)
-    fact_paragraph = remove_year_at_start(fact_paragraph)
-    print("3/6: 撰写观点句")
-    source_text = f"{source_text}\n{opinion_or_requirement}"
-    opinion_sentences = await draft_opinion_sentences(fact_paragraph, source_text)
-    print("4/6: 创建并完善标题")
-    brief_content = f"{fact_paragraph}{opinion_sentences}"
-    brief_title = await draft_and_refine_brief_title(brief_content)
-    print("5/6: 翻译为其它语言")
-    brief_title_in_english, brief_content_in_english, brief_title_in_german, brief_content_in_german, brief_title_in_french, brief_content_in_french, brief_title_in_japanese, brief_content_in_japanese = await translate_to_other_languages(brief_title, brief_content)
-    print("--- 简报生成完毕 ---")
-    save_as_txt(f"{brief_title}\n\n{brief_content}\n\n{brief_title_in_english}\n\n{brief_content_in_english}\n\n{brief_title_in_german}\n\n{brief_content_in_german}\n\n{brief_title_in_french}\n\n{brief_content_in_french}\n\n{brief_title_in_japanese}\n\n{brief_content_in_japanese})", file_name)
-    return brief_title, brief_content
+    async def generate_brief(file_name: str) -> None:
+        """
+        处理单个文件的完整简报生成工作流
+        Args:
+            file_name (str): 输入文件名 (不包含.txt扩展名)
+        Returns:
+            None
+        """
+        print(f"开始处理文件: {file_name}")
+        print(f"[{file_name}] 1/6: 读取并解读原文")
+        source_text = get_source_text(file_name)
+        interpretation, published_date, opinion_or_requirement = await interpret_source_text(source_text)
+        interpretation = convert_to_date(interpretation, published_date)
+        source_text = convert_to_cn_term(source_text)
+        source_text = clean_stock_codes(source_text)
+        source_text = convert_to_date(source_text, published_date)
+        print(f"[{file_name}] 2/6: 创建并完善事实段落")
+        fact_paragraph = await draft_and_refine_fact_paragraph(source_text, interpretation)
+        fact_paragraph = remove_year_at_start(fact_paragraph)
+        print(f"[{file_name}] 3/6: 撰写观点句")
+        source_text = f"{source_text}\n{opinion_or_requirement}"
+        opinion_sentences = await draft_opinion_sentences(fact_paragraph, source_text)
+        print(f"[{file_name}] 4/6: 创建并完善标题")
+        brief_content = f"{fact_paragraph}{opinion_sentences}"
+        brief_title = await draft_and_refine_brief_title(brief_content)
+        print(f"[{file_name}] 5/6: 翻译为其它语言")
+        brief_title_in_english, brief_content_in_english, brief_title_in_german, brief_content_in_german, brief_title_in_french, brief_content_in_french, brief_title_in_japanese, brief_content_in_japanese = await translate_to_other_languages(brief_title, brief_content)
+        print(f"[{file_name}] 6/6: 保存文件")
+        save_as_txt(f"{brief_title}\n\n{brief_content}\n\n{brief_title_in_english}\n\n{brief_content_in_english}\n\n{brief_title_in_german}\n\n{brief_content_in_german}\n\n{brief_title_in_french}\n\n{brief_content_in_french}\n\n{brief_title_in_japanese}\n\n{brief_content_in_japanese}", file_name)
+        print(f"[{file_name}] --- 简报生成完毕 ---")
+        # 移除 return None，因为函数已声明返回 None
+    if file_names := get_source_files():
+        print(f"发现 {len(file_names)} 个文件，开始并行处理: {file_names}")
+        tasks = [generate_brief(file_name) for file_name in file_names]
+        await asyncio.gather(*tasks)  # 移除 return，只执行不返回
+        print(f"\n=== 所有 {len(file_names)} 个文件处理完成 ===")
+    return None
 
-if __name__ == "__main__":    
-    file_name = "1"
-    asyncio.run(generate_brief(file_name))
+if __name__ == "__main__":
+    asyncio.run(generate_briefs())

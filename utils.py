@@ -1,16 +1,16 @@
 # utils.py
 
+import aiohttp
 import asyncio
 import requests
 import os
 import re
 from datetime import datetime, timedelta
 import random
-from typing import Optional, Dict, Any, Union, List
+from typing import Optional
 import importlib
-import json
 
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = "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"
 
 async def call_llm(system_message: str, user_message: str, model="qwen/qwen3-32b", temperature=0.5, top_p=0.95, frequency_penalty=0, presence_penalty=0) -> Optional[str]:
     api_key = OPENROUTER_API_KEY
@@ -28,23 +28,17 @@ async def call_llm(system_message: str, user_message: str, model="qwen/qwen3-32b
         "frequency_penalty": frequency_penalty,
         "presence_penalty": presence_penalty
     }
-    def call():
+    for attempt in range(3):
         try:
-            response = requests.post(url, headers=headers, json=data, verify=False, timeout=60)
-            if response.status_code == 200:
-                response_json = response.json()
-                if "error" not in response_json and "choices" in response_json and response_json["choices"]:
-                    content = response_json["choices"][0].get("message", {}).get("content")
-                    if content:
-                        print(content)
-                        return content
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=data, ssl=False, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                    if response.status == 200:
+                        response_json = await response.json()
+                        if content := response_json["choices"][0]["message"]["content"]:
+                            print(content)
+                            return content
         except Exception:
             pass
-        return None
-    for attempt in range(3):
-        result = await asyncio.to_thread(call)
-        if result:
-            return result
     return None
 
 def get_prompt(name: str, **arguments) -> str:
