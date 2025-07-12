@@ -8,7 +8,7 @@ Here is the brief's English title which must be a coherent sentence containing n
 </english_title>
 
 <english_content>
-Here is the brief's English content, which must be a complete and accurate translation of the content in Chinese.
+Here is the briefing's content in English, which must be a complete and accurate translation of the original Chinese content.
 </english_content>
 
 <german_title>
@@ -16,7 +16,7 @@ Hier ist der deutsche Titel des Briefs, der ein zusammenhängender Satz ohne Sat
 </german_title>
 
 <german_content>
-Hier ist der deutsche Inhalt des Briefs, der eine vollständige und genaue Übersetzung des chinesischen Inhalts sein muss.
+Hier ist der Inhalt der Zusammenfassung auf Deutsch, der eine vollständige und genaue Übersetzung des chinesischen Originalinhalts sein muss.
 </german_content>
 
 <french_title>
@@ -24,7 +24,7 @@ Voici le titre du brief en français, qui doit être une phrase cohérente ne co
 </french_title>
 
 <french_content>
-Voici le contenu du brief en français, qui doit être une traduction complète et fidèle du contenu en chinois.
+Voici le contenu du rapport en français, qui doit être une traduction complète et exacte du contenu original en chinois.
 </french_content>
 
 <japanese_title>
@@ -32,6 +32,6 @@ Voici le contenu du brief en français, qui doit être une traduction complète 
 </japanese_title>
 
 <japanese_content>
-ここに日本語のブリーフの本文が入ります。これは、中国語の本文を完全かつ正確に翻訳したものでなければなりません。
+ここに日本語のブリーフィングの本文が入ります。これは、中国語の原文を完全に、かつ正確に翻訳したものでなければなりません。
 </japanese_content>
 """

@@ -8,6 +8,7 @@ frozenlist==1.7.0
 idna==3.10
 multidict==6.6.3
 propcache==0.3.2
+regex==2024.11.6
 requests==2.32.4
 urllib3==2.5.0
 yarl==1.20.1

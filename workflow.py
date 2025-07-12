@@ -3,7 +3,7 @@
 import asyncio
 import json
 import os
-from utils import convert_to_cn_term, convert_to_date, clean_stock_codes, get_prompt, call_llm, extract_with_xml, split_to_sentences, save_as_txt, remove_year_at_start
+from utils import convert_to_cn_term, convert_to_date, clean_stock_codes, get_prompt, call_llm, extract_with_xml, split_to_sentences, save_as_txt, replace_year_with_2025, remove_year_at_start
 
 def get_source_files() -> list[str]:
     """
@@ -44,7 +44,7 @@ async def interpret_source_text(source_text: str) -> str:
         llm_result = await call_llm(system_message, user_message)
         if interpretation := extract_with_xml(llm_result, "interpretation"):
             data = json.loads(interpretation)
-            published_date = data.pop("新闻文章发布日期")
+            published_date = replace_year_with_2025(data.pop("新闻文章发布日期"))
             opinion_or_requirement = data.pop("分析师的观点或分析要求")    
             return json.dumps(data, ensure_ascii=False, indent=4), published_date, opinion_or_requirement
 
@@ -106,10 +106,10 @@ async def refine_fact_paragraph(fact_paragraph: str, feedback_on_fact_paragraph:
     Returns:                    
         str: 修改后的段落，如果无需修改则返回None
     """
-    if "无需任何修改" in feedback_on_fact_paragraph and "无需任何修改" in feedback_on_fact_sentences:
+    if '"corrections_required": false' in feedback_on_fact_paragraph and '"corrections_required": false' in feedback_on_fact_sentences:
         return None
     system_message = get_prompt('e_refine_fact_paragraph')
-    user_message = f"<fact_paragraph>\n{fact_paragraph}\n</fact_paragraph>" + (f"\n<feedback_on_fact_paragraph>\n{feedback_on_fact_paragraph}\n</feedback_on_fact_paragraph>" if "无需任何修改" not in feedback_on_fact_paragraph else "") + (f"\n<feedback_on_fact_sentences>\n{feedback_on_fact_sentences}\n</feedback_on_fact_sentences>" if "无需任何修改" not in feedback_on_fact_sentences else "")
+    user_message = f"<fact_paragraph>\n{fact_paragraph}\n</fact_paragraph>" + (f"\n<feedback_on_fact_paragraph>\n{feedback_on_fact_paragraph}\n</feedback_on_fact_paragraph>" if '"corrections_required": false' not in feedback_on_fact_paragraph else "") + (f"\n<feedback_on_fact_sentences>\n{feedback_on_fact_sentences}\n</feedback_on_fact_sentences>" if '"corrections_required": false' not in feedback_on_fact_sentences else "")
     for attempt in range(3):
         llm_result = await call_llm(system_message, user_message)
         if refined_fact_paragraph := extract_with_xml(llm_result, "refined_fact_paragraph"):
@@ -182,6 +182,12 @@ async def review_brief_title(brief_content: str, brief_title: str) -> str:
     for attempt in range(3):
         llm_result = await call_llm(system_message, user_message)
         if feedback_on_brief_title := extract_with_xml(llm_result, "feedback_on_brief_title"):
+            if adjust_length_prompt := get_prompt('k_adjust_length', text=brief_title):
+                if '"corrections_required": false' in feedback_on_brief_title:
+                    feedback_on_brief_title = feedback_on_brief_title.replace('"corrections_required": false', adjust_length_prompt)
+                else:
+                    feedback_on_brief_title = feedback_on_brief_title + adjust_length_prompt
+                print(feedback_on_brief_title)
             return feedback_on_brief_title
 
 async def refine_brief_title(brief_title: str, feedback_on_brief_title: str) -> str:
@@ -193,7 +199,7 @@ async def refine_brief_title(brief_title: str, feedback_on_brief_title: str) -> 
     Returns:                    
         str: 修改后的标题，如果无需修改则返回None
     """
-    if "无需任何修改" in feedback_on_brief_title:
+    if '"corrections_required": false' in feedback_on_brief_title:
         return None
     system_message = get_prompt('i_refine_brief_title')
     user_message = f"<brief_title>\n{brief_title}\n</brief_title>\n<feedback_on_brief_title>\n{feedback_on_brief_title}\n</feedback_on_brief_title>"
@@ -265,22 +271,19 @@ async def generate_briefs() -> None:
         fact_paragraph = await draft_and_refine_fact_paragraph(source_text, interpretation)
         fact_paragraph = remove_year_at_start(fact_paragraph)
         print(f"[{file_name}] 3/6: 撰写观点句")
-        source_text = f"{source_text}\n{opinion_or_requirement}"
+        source_text = f"{source_text}\n\n{opinion_or_requirement}"
         opinion_sentences = await draft_opinion_sentences(fact_paragraph, source_text)
         print(f"[{file_name}] 4/6: 创建并完善标题")
         brief_content = f"{fact_paragraph}{opinion_sentences}"
         brief_title = await draft_and_refine_brief_title(brief_content)
         print(f"[{file_name}] 5/6: 翻译为其它语言")
-        brief_title_in_english, brief_content_in_english, brief_title_in_german, brief_content_in_german, brief_title_in_french, brief_content_in_french, brief_title_in_japanese, brief_content_in_japanese = await translate_to_other_languages(brief_title, brief_content)
+        english_title, english_content, german_title, german_content, french_title, french_content, japanese_title, japanese_content = await translate_to_other_languages(brief_title, brief_content)
         print(f"[{file_name}] 6/6: 保存文件")
-        save_as_txt(f"{brief_title}\n\n{brief_content}\n\n{brief_title_in_english}\n\n{brief_content_in_english}\n\n{brief_title_in_german}\n\n{brief_content_in_german}\n\n{brief_title_in_french}\n\n{brief_content_in_french}\n\n{brief_title_in_japanese}\n\n{brief_content_in_japanese}", file_name)
-        print(f"[{file_name}] --- 简报生成完毕 ---")
-        # 移除 return None，因为函数已声明返回 None
+        save_as_txt(f"{brief_title}\n\n{brief_content}\n\n{english_title}\n\n{english_content}\n\n{german_title}\n\n{german_content}\n\n{french_title}\n\n{french_content}\n\n{japanese_title}\n\n{japanese_content}", file_name)
     if file_names := get_source_files():
         print(f"发现 {len(file_names)} 个文件，开始并行处理: {file_names}")
-        tasks = [generate_brief(file_name) for file_name in file_names]
-        await asyncio.gather(*tasks)  # 移除 return，只执行不返回
-        print(f"\n=== 所有 {len(file_names)} 个文件处理完成 ===")
+        await asyncio.gather(*[generate_brief(file_name) for file_name in file_names])
+        print(f"所有 {len(file_names)} 个文件处理完成")
     return None
 
 if __name__ == "__main__":

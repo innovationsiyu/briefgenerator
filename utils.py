@@ -1,8 +1,6 @@
 # utils.py
 
 import aiohttp
-import asyncio
-import requests
 import os
 import re
 from datetime import datetime, timedelta
@@ -10,7 +8,7 @@ import random
 from typing import Optional
 import importlib
 
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = ""
 
 async def call_llm(system_message: str, user_message: str, model="qwen/qwen3-32b", temperature=0.5, top_p=0.95, frequency_penalty=0, presence_penalty=0) -> Optional[str]:
     api_key = OPENROUTER_API_KEY
@@ -28,17 +26,16 @@ async def call_llm(system_message: str, user_message: str, model="qwen/qwen3-32b
         "frequency_penalty": frequency_penalty,
         "presence_penalty": presence_penalty
     }
-    for attempt in range(3):
-        try:
-            async with aiohttp.ClientSession() as session:
+    try:
+        async with aiohttp.ClientSession() as session:
+            for attempt in range(3):
                 async with session.post(url, headers=headers, json=data, ssl=False, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                    if response.status == 200:
-                        response_json = await response.json()
-                        if content := response_json["choices"][0]["message"]["content"]:
-                            print(content)
-                            return content
-        except Exception:
-            pass
+                    response_json = await response.json()
+                    if content := response_json["choices"][0]["message"]["content"]:
+                        print(content)
+                        return content
+    except Exception:
+        pass
     return None
 
 def get_prompt(name: str, **arguments) -> str:
@@ -77,10 +74,11 @@ def save_as_txt(text, file_name):
         f.write(text)
     print(f"文本已保存到: {file_path}")
 
-pattern = r"^\d+年"
+def replace_year_with_2025(text: str) -> str:
+    return re.sub(r'^\d+-', '2025-', text)
 
 def remove_year_at_start(text: str) -> str:
-    return re.sub(pattern, "", text)
+    return re.sub(r"^\d+年", "", text)
 
 def split_to_sentences(text):
     positions = [i for i, char in enumerate(text) if char == '。'] + [len(text) - 1]
@@ -183,10 +181,8 @@ date_reference_mapping = {
 def convert_to_cn_term(text):
     """
     将台湾媒体用语转换为大陆用语
-    
     参数:
         text (str): 需要处理的文本
-        
     返回:
         str: 转换后的文本
     """
@@ -198,12 +194,10 @@ def convert_to_cn_term(text):
 def calculate_target_date(reference_date, target_weekday_num, time_modifier=None):
     """
     根据参考日期、目标周几和时间限定词计算目标日期
-    
     参数:
         reference_date: 参考日期
         target_weekday_num: 目标周几的数字（0-6，0为周一）
         time_modifier: 时间限定词（'上'、'这'/'本'、'下'，或None）
-    
     返回:
         datetime: 计算出的目标日期
     """
@@ -242,8 +236,7 @@ def convert_to_date(text, reference_date=None):
     elif isinstance(reference_date, str):
         try:
             reference_date = datetime.fromisoformat(reference_date)
-        except ValueError:
-            print(f"警告：无法解析日期字符串 '{reference_date}'，使用当前日期")
+        except Exception:
             reference_date = datetime.now()
     # 处理周几表达式
     weekday_matches = list(WEEKDAY_PATTERN.finditer(text))
