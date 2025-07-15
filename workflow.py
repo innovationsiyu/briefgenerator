@@ -41,7 +41,7 @@ async def interpret_source_text(source_text: str) -> str:
     system_message = get_prompt('a_interpret_source_text')
     user_message = f"<source_text>\n{source_text}\n</source_text>"
     for attempt in range(3):
-        llm_result = await call_llm(system_message, user_message)
+        llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.1, 0.5, 0, 0)
         if interpretation := extract_with_xml(llm_result, "interpretation"):
             data = json.loads(interpretation)
             published_date = replace_year_with_2025(data.pop("新闻文章发布日期"))
@@ -60,9 +60,9 @@ async def draft_fact_paragraph(source_text: str, interpretation: str) -> str:
     system_message = get_prompt('b_draft_fact_paragraph')
     user_message = f"<source_text>\n{source_text}\n</source_text>\n<interpretation>\n{interpretation}\n</interpretation>"
     for attempt in range(3):
-        llm_result = await call_llm(system_message, user_message)
+        llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.3, 0.95, 0, 0)
         if fact_paragraph := extract_with_xml(llm_result, "fact_paragraph"):
-            return fact_paragraph
+            return fact_paragraph.replace('\n', '')
 
 async def review_fact_paragraph(source_text: str, fact_paragraph: str) -> str:
     """
@@ -76,7 +76,7 @@ async def review_fact_paragraph(source_text: str, fact_paragraph: str) -> str:
     system_message = get_prompt('c_review_fact_paragraph')
     user_message = f"<source_text>\n{source_text}\n</source_text>\n<fact_paragraph>\n{fact_paragraph}\n</fact_paragraph>"
     for attempt in range(3):
-        llm_result = await call_llm(system_message, user_message)
+        llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.3, 0.95, 0, 0)
         if feedback_on_fact_paragraph := extract_with_xml(llm_result, "feedback_on_fact_paragraph"):
             return feedback_on_fact_paragraph
 
@@ -92,7 +92,7 @@ async def review_fact_sentences(source_text: str, fact_paragraph: str) -> str:
     system_message = get_prompt('d_review_fact_sentences')
     user_message = f"<source_text>\n{source_text}\n</source_text>\n<fact_sentences>\n{split_to_sentences(fact_paragraph)}\n</fact_sentences>"
     for attempt in range(3):
-        llm_result = await call_llm(system_message, user_message)
+        llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.3, 0.95, 0, 0)
         if feedback_on_fact_sentences := extract_with_xml(llm_result, "feedback_on_fact_sentences"):
             return feedback_on_fact_sentences
 
@@ -111,7 +111,7 @@ async def refine_fact_paragraph(fact_paragraph: str, feedback_on_fact_paragraph:
     system_message = get_prompt('e_refine_fact_paragraph')
     user_message = f"<fact_paragraph>\n{fact_paragraph}\n</fact_paragraph>" + (f"\n<feedback_on_fact_paragraph>\n{feedback_on_fact_paragraph}\n</feedback_on_fact_paragraph>" if '"corrections_required": false' not in feedback_on_fact_paragraph else "") + (f"\n<feedback_on_fact_sentences>\n{feedback_on_fact_sentences}\n</feedback_on_fact_sentences>" if '"corrections_required": false' not in feedback_on_fact_sentences else "")
     for attempt in range(3):
-        llm_result = await call_llm(system_message, user_message)
+        llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-R1-0528", 0.1, 0.5, 0, 0)
         if refined_fact_paragraph := extract_with_xml(llm_result, "refined_fact_paragraph"):
             return refined_fact_paragraph
 
@@ -149,7 +149,7 @@ async def draft_opinion_sentences(fact_paragraph: str, source_text: str) -> str:
     system_message = get_prompt('f_draft_opinion_sentences')
     user_message = f"<fact_paragraph>\n{fact_paragraph}\n</fact_paragraph>\n<source_text>\n{source_text}\n</source_text>"
     for attempt in range(3):
-        llm_result = await call_llm(system_message, user_message)
+        llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.6, 0.95, 0, 0.5)
         if opinion_sentences := extract_with_xml(llm_result, "opinion_sentences"):
             return opinion_sentences
 
@@ -164,7 +164,7 @@ async def draft_brief_title(brief_content: str) -> str:
     system_message = get_prompt('g_draft_brief_title')
     user_message = f"<brief_content>\n{brief_content}\n</brief_content>"
     for attempt in range(3):
-        llm_result = await call_llm(system_message, user_message, "google/gemini-2.5-flash")
+        llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.3, 0.95, 0, 0.5)
         if brief_title := extract_with_xml(llm_result, "brief_title"):
             return brief_title
 
@@ -180,7 +180,7 @@ async def review_brief_title(brief_content: str, brief_title: str) -> str:
     system_message = get_prompt('h_review_brief_title')
     user_message = f"<brief_content>\n{brief_content}\n</brief_content>\n<brief_title>\n{brief_title}\n</brief_title>"
     for attempt in range(3):
-        llm_result = await call_llm(system_message, user_message)
+        llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.3, 0.95, 0, 0)
         if feedback_on_brief_title := extract_with_xml(llm_result, "feedback_on_brief_title"):
             if adjust_length_prompt := get_prompt('k_adjust_length', text=brief_title):
                 if '"corrections_required": false' in feedback_on_brief_title:
@@ -204,7 +204,7 @@ async def refine_brief_title(brief_title: str, feedback_on_brief_title: str) -> 
     system_message = get_prompt('i_refine_brief_title')
     user_message = f"<brief_title>\n{brief_title}\n</brief_title>\n<feedback_on_brief_title>\n{feedback_on_brief_title}\n</feedback_on_brief_title>"
     for attempt in range(3):
-        llm_result = await call_llm(system_message, user_message)
+        llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-R1-0528", 0.1, 0.5, 0, 0)
         if refined_brief_title := extract_with_xml(llm_result, "refined_brief_title"):
             return refined_brief_title
 
@@ -241,7 +241,7 @@ async def translate_to_other_languages(brief_title: str, brief_content: str) -> 
     system_message = get_prompt('l_translate_to_other_languages')
     user_message = f"<chinese_title>\n{brief_title}\n</chinese_title>\n<chinese_content>\n{brief_content}\n</chinese_content>"
     for attempt in range(3):
-        llm_result = await call_llm(system_message, user_message)
+        llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.1, 0.5, 0, 0)
         if brief_in_other_languages := extract_with_xml(llm_result, ["english_title", "english_content", "german_title", "german_content", "french_title", "french_content", "japanese_title", "japanese_content"]):
             return tuple(brief_in_other_languages)
 
@@ -276,10 +276,13 @@ async def generate_briefs() -> None:
         print(f"[{file_name}] 4/6: 创建并完善标题")
         brief_content = f"{fact_paragraph}{opinion_sentences}"
         brief_title = await draft_and_refine_brief_title(brief_content)
+        save_as_txt(f"{brief_title}\n\n{brief_content}", file_name)
+        """
         print(f"[{file_name}] 5/6: 翻译为其它语言")
         english_title, english_content, german_title, german_content, french_title, french_content, japanese_title, japanese_content = await translate_to_other_languages(brief_title, brief_content)
         print(f"[{file_name}] 6/6: 保存文件")
         save_as_txt(f"{brief_title}\n\n{brief_content}\n\n{english_title}\n\n{english_content}\n\n{german_title}\n\n{german_content}\n\n{french_title}\n\n{french_content}\n\n{japanese_title}\n\n{japanese_content}", file_name)
+        """
     if file_names := get_source_files():
         print(f"发现 {len(file_names)} 个文件，开始并行处理: {file_names}")
         await asyncio.gather(*[generate_brief(file_name) for file_name in file_names])

@@ -8,11 +8,11 @@ import random
 from typing import Optional
 import importlib
 
-OPENROUTER_API_KEY = ""
+HYPERBOLIC_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzaXl1QHl1c2ljb25zdWx0aW5nLmNvbSIsImlhdCI6MTczOTUxNzI0NH0.LoKORpGjmaOXFwe-RvsRghmVwny_g2n1fulNdtVNNh0"
 
-async def call_llm(system_message: str, user_message: str, model="qwen/qwen3-32b", temperature=0.5, top_p=0.95, frequency_penalty=0, presence_penalty=0) -> Optional[str]:
-    api_key = OPENROUTER_API_KEY
-    url = "https://openrouter.ai/api/v1/chat/completions"
+async def call_llm(system_message: str, user_message: str, model="deepseek-ai/DeepSeek-V3-0324", temperature=0.5, top_p=0.95, frequency_penalty=0, presence_penalty=0) -> Optional[str]:
+    api_key = HYPERBOLIC_API_KEY
+    url = "https://api.hyperbolic.xyz/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -52,6 +52,7 @@ def get_prompt(name: str, **arguments) -> str:
             return prompt
 
 def extract_with_xml(text, tags):
+    text = re.sub(r'<think>[\s\S]*?</think>', '', text)
     tags = tags if isinstance(tags, list) else [tags]
     results = []
     for tag in tags:
