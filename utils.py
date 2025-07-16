@@ -70,7 +70,7 @@ def save_as_txt(text, file_name):
         file_name: 文件名（不包含.txt扩展名）
     """
     os.makedirs("outputs", exist_ok=True)
-    file_path = f"outputs/{f"{file_name}_{random.randint(100000, 999999)}.txt"}"
+    file_path = f"outputs/{file_name}_{random.randint(100000, 999999)}.txt"
     with open(file_path, 'w', encoding='utf-8') as f:
         f.write(text)
     print(f"文本已保存到: {file_path}")
