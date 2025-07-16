@@ -56,7 +56,7 @@ def extract_with_xml(text, tags):
     tags = tags if isinstance(tags, list) else [tags]
     results = []
     for tag in tags:
-        if matched := re.search(rf"<{tag}>(?P<result>[\s\S]*)</{tag}>", text):
+        if matched := re.search(rf".*<{tag}>(?P<result>[\s\S]*)</{tag}>", text, re.DOTALL):
             results.append(matched.group("result").strip())
         else:
             return None
