@@ -1,8 +1,10 @@
 # utils.py
 
 import aiohttp
+import asyncio
 import os
 import re
+import json
 from datetime import datetime, timedelta
 import random
 from typing import Optional
@@ -30,10 +32,41 @@ async def call_llm(system_message: str, user_message: str, model="deepseek-ai/De
         async with aiohttp.ClientSession() as session:
             for attempt in range(3):
                 async with session.post(url, headers=headers, json=data, ssl=False, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                    response_json = await response.json()
-                    if content := response_json["choices"][0]["message"]["content"]:
+                    response_data = await response.json()
+                    if content := response_data["choices"][0]["message"]["content"]:
                         print(content)
                         return content
+    except Exception:
+        pass
+    return None
+
+async def call_local_llm(system_message: str, user_message: str, model="qwen3:32b", temperature=0.5, top_p=0.95, frequency_penalty=0, presence_penalty=0) -> Optional[str]:
+    url = "http://localhost:11434/api/chat"
+    data = {
+        "messages": [{"role": "system", "content": system_message}, {"role": "user", "content": user_message}],
+        "model": model,
+        "max_tokens": 8192,
+        "temperature": temperature,
+        "top_p": top_p,
+        "frequency_penalty": frequency_penalty,
+        "presence_penalty": presence_penalty,
+        "stream": True
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers={}, json=data, timeout=aiohttp.ClientTimeout(total=150)) as response:
+                content = ""
+                async for line in response.content:
+                    if line:
+                        try:
+                            chunk = json.loads(line.decode("utf-8"))
+                            content += chunk["message"]["content"]
+                            print(chunk["message"]["content"], end="", flush=True)
+                        except json.JSONDecodeError:
+                            continue
+                if content:
+                    print()
+                    return content
     except Exception:
         pass
     return None
@@ -60,7 +93,18 @@ def extract_with_xml(text, tags):
             results.append(matched.group("result").strip())
         else:
             return None
-    return tuple(results) if len(tags) > 1 else results[0]
+    return tuple(results) if len(results) > 1 else results[0]
+
+def extract_from_json(data, keys):
+    data = json.loads(data)
+    keys = keys if isinstance(keys, list) else [keys]
+    results = []
+    for key in keys:
+        if key in data:
+            results.append(data[key])
+        else:
+            return None
+    return tuple(results) if len(results) > 1 else results[0]
 
 def save_as_txt(text, file_name):
     """
@@ -70,7 +114,7 @@ def save_as_txt(text, file_name):
         file_name: 文件名（不包含.txt扩展名）
     """
     os.makedirs("outputs", exist_ok=True)
-    file_path = f"outputs/{file_name}_{random.randint(100000, 999999)}.txt"
+    file_path = f"outputs/{f"{file_name}_{random.randint(100000, 999999)}.txt"}"
     with open(file_path, 'w', encoding='utf-8') as f:
         f.write(text)
     print(f"文本已保存到: {file_path}")
@@ -309,3 +353,28 @@ def clean_stock_codes(text):
     empty_brackets_pattern = rf'[\(（]({meaningless_chars}*)[\)）]'
     text = re.sub(empty_brackets_pattern, '', text)
     return text
+
+# 测试 call_local_llm 函数
+async def test_call_local_llm():
+    """
+    测试本地LLM调用是否正常工作
+    """
+    print("开始测试 call_local_llm 函数...")
+    
+    system_message = "你是一个有用的助手。"
+    user_message = "请回答：1+1等于几？"
+    
+    try:
+        result = await call_local_llm(system_message, user_message, "phi4:latest", 0.1, 0.5, 0, 0)
+        if result:
+            print(f"✅ LLM调用成功！返回内容长度: {len(result)} 字符")
+            print(f"返回内容预览: {result[:100]}...")
+        else:
+            print("❌ LLM调用失败：返回None")
+    except Exception as e:
+        print(f"❌ LLM调用出错: {e}")
+
+if __name__ == "__main__":
+    # asyncio.run(generate_briefs())
+    # asyncio.run(label_articles("安邦历史文章测试"))
+    asyncio.run(test_call_local_llm())
