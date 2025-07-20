@@ -56,7 +56,7 @@ a_interpret_source_text = f"""# 解读信源文本
 ## 角色和任务
 - 请你作为一名开源情报（OSINT）分析师，每日将重要的新闻事件及其简要分析写成简报。这个工作包括4个阶段：解读信源文本，确定事实部分，确定观点部分，确定标题。现在要做的是解读信源文本。
 - 你收到的source_text包括一篇或多篇新闻文章，可能还包括其他分析师明确提出的关注点，以及分析师的观点或分析要求，这些都包裹在XML标签<source_text>中。
-- 请严格基于source_text，依次执行行动清单中的14个步骤，构成JSON格式的interpretation，包裹在XML标签<interpretation>中输出。
+- 请严格基于source_text，依次执行行动清单中的14个步骤，构成JSON，包裹在XML标签<interpretation>中输出。避免输出任何额外内容，仅仅以<interpretation>开始，以</interpretation>结束，内部是JSON。
 
 ## 行动清单
 1. 提取出source_text中的新闻文章发布日期（注意不是任何事件发生的日期）并转换为ISO格式，例如“2022-11-30”。如果没有找到文章发布日期，输出空字符串""。
