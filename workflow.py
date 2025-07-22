@@ -439,19 +439,28 @@ async def generate_briefs() -> None:
 
 def get_reference_text(file_name: str) -> list:
     """
-    从根目录读取指定的csv文件，提取InfoTitle和InfoContent列内容
+    从根目录读取指定的csv文件，提取特定条件下的行数据
     
     Args:
         file_name: 文件名（不包含.csv扩展名）
     Returns:
-        list: 包含每篇文章内容的列表
+        list: 包含(index, article_content)元组的列表，仅包含所有指定标签列都为"None"或为空的行
     """    
-    articles = []
     with open(f"{file_name}.csv", 'r', encoding='utf-8') as file:
-        for row in csv.DictReader(file):
-            article = f"{row['InfoTitle']}\n{row['InfoContent']}"
-            articles.append(article)
-    return articles
+        return [
+            (index, f"{row['InfoTitle']}\n{row['InfoContent']}")
+            for index, row in enumerate(csv.DictReader(file))
+            if all(row[column] == "None" or row[column] == "" for column in [
+                "political_and_economic_terms",
+                "technical_terms", 
+                "other_abstract_concepts",
+                "cities_or_districts",
+                "persons",
+                "organizations",
+                "other_concrete_entities",
+                "other_tags_of_topic_or_points"
+            ])
+        ]
 
 async def generate_article_keywords_and_tags(article: str) -> dict:
     """
@@ -468,49 +477,43 @@ async def generate_article_keywords_and_tags(article: str) -> dict:
         try:
             llm_result = await call_local_llm(system_message, user_message, "phi4:latest", 0.1, 0.5, 0, 0)
             if keywords_and_tags := json.loads(extract_with_xml(llm_result, "keywords_and_tags")):
-                return keywords_and_tags
+                if all(key in keywords_and_tags for key in [
+                    "political_and_economic_terms",
+                    "technical_terms", 
+                    "other_abstract_concepts",
+                    "cities_or_districts",
+                    "persons",
+                    "organizations",
+                    "other_concrete_entities",
+                    "other_tags_of_topic_or_points"
+                ]):
+                    return keywords_and_tags
         except Exception:
             pass
     return {
-        "political_and_economic_terms": None,
-        "technical_terms": None,
-        "other_abstract_concepts": None,
-        "cities_or_districts": None,
-        "persons": None,
-        "organizations": None,
-        "other_concrete_entities": None,
-        "other_tags_of_topic_or_points": None
+        "political_and_economic_terms": "",
+        "technical_terms": "",
+        "other_abstract_concepts": "",
+        "cities_or_districts": "",
+        "persons": "",
+        "organizations": "",
+        "other_concrete_entities": "",
+        "other_tags_of_topic_or_points": ""
     }
 
-def article_keywords_and_tags_to_csv(article_keywords_and_tags: dict, index: int, file_name: str):
+def article_keywords_and_tags_to_csv(index: int, article_keywords_and_tags: dict, file_name: str):
     """
     将单篇文章的关键词和标签数据写入csv文件的指定行
     
     Args:
-        article_keywords_and_tags: 单篇文章的关键词和标签字典
         index: 文章在列表中的索引（从0开始）
+        article_keywords_and_tags: 单篇文章的关键词和标签字典
         file_name: 文件名（不包含.csv扩展名）
     """
     df = pd.read_csv(f"{file_name}.csv")
-    columns = ['organizations', 'persons', 'cities_or_districts', 'other_concrete_entities', 'political_and_economic_terms', 'technical_terms', 'other_abstract_concepts', 'other_tags_of_topic_or_points']
-    for column in columns:
+    for column in ['organizations', 'persons', 'cities_or_districts', 'other_concrete_entities', 'political_and_economic_terms', 'technical_terms', 'other_abstract_concepts', 'other_tags_of_topic_or_points']:
         df.at[index, column] = str(article_keywords_and_tags[column])
     df.to_csv(f"{file_name}.csv", index=False, encoding='utf-8')
-
-async def generate_articles_keywords_and_tags(articles: list, file_name: str):
-    """
-    从文章内容列表中提取关键词和标签，每处理一篇文章就立即保存到CSV
-    
-    Args:
-        articles (list): 文章内容列表
-        file_name (str): 文件名（不包含.csv扩展名）
-    """
-    print(f"开始处理 {len(articles)} 篇文章")
-    for i, article in enumerate(articles):
-        print(f"正在处理第 {i+1} 篇文章...")
-        article_keywords_and_tags = await generate_article_keywords_and_tags(article)
-        article_keywords_and_tags_to_csv(article_keywords_and_tags, i, file_name)
-        print(f"第 {i+1} 篇文章处理完成并已保存")
 
 async def label_articles(file_name: str):
     """
@@ -519,10 +522,14 @@ async def label_articles(file_name: str):
     Args:
         file_name (str): 文件名（不包含.csv扩展名）
     """
-    articles = get_reference_text(file_name)
-    await generate_articles_keywords_and_tags(articles, file_name)
-
+    index_article_tuples = get_reference_text(file_name)
+    print(f"开始处理 {len(index_article_tuples)} 篇文章")
+    for i, article in index_article_tuples:
+        print(f"正在处理索引 {i} 的文章...")
+        article_keywords_and_tags = await generate_article_keywords_and_tags(article)
+        article_keywords_and_tags_to_csv(i, article_keywords_and_tags, file_name)
+        print(f"索引 {i} 的文章处理完成并已保存")
 
 if __name__ == "__main__":
     # asyncio.run(generate_briefs())
-    asyncio.run(label_articles("测试数据/每日经济每日金融1601-1700"))
+    asyncio.run(label_articles("测试数据/每日经济每日金融1701-1800"))
