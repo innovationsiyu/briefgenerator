@@ -422,12 +422,14 @@ async def generate_briefs() -> None:
         brief_content = f"{fact_paragraph}{opinion_sentences}"
         brief_title = await draft_and_refine_brief_title(brief_content)
         save_as_txt(f"{brief_title}\n\n{brief_content}", file_name)
+        """
         print(f"[{file_name}] 5/6: 匹配历史文章")
         matched_articles = "\n\n\n\n".join([f"{article['InfoTitle']}\n\n{article['InfoContent']}" for article in await match_articles(f"{brief_title}\n\n{brief_content}", "每日经济每日金融1-10")])
         save_as_txt(f"{brief_title}\n\n{brief_content}\n\n{matched_articles}", f"{file_name} with matched articles")
         print(f"[{file_name}] 6/6: 翻译为其它语言")
         english_title, english_content, german_title, german_content, french_title, french_content, japanese_title, japanese_content = await translate_to_other_languages(brief_title, brief_content)
         save_as_txt(f"{brief_title}\n\n{brief_content}\n\n{english_title}\n\n{english_content}\n\n{german_title}\n\n{german_content}\n\n{french_title}\n\n{french_content}\n\n{japanese_title}\n\n{japanese_content}\n\n{matched_articles}", file_name)
+        """
     if file_names := get_source_files():
         print(f"发现 {len(file_names)} 个文件，开始并行处理: {file_names}")
         await asyncio.gather(*[generate_brief(file_name) for file_name in file_names])
@@ -480,37 +482,35 @@ async def generate_article_keywords_and_tags(article: str) -> dict:
         "other_tags_of_topic_or_points": None
     }
 
-async def generate_articles_keywords_and_tags(articles: list) -> list:
+def article_keywords_and_tags_to_csv(article_keywords_and_tags: dict, index: int, file_name: str):
     """
-    从文章内容列表中提取关键词和标签
+    将单篇文章的关键词和标签数据写入csv文件的指定行
     
     Args:
-        articles (list): 文章内容列表
-    Returns:
-        list: 关键词和标签字典列表
-    """
-    print(f"开始处理 {len(articles)} 篇文章")
-    articles_keywords_and_tags = []
-    for i, article in enumerate(articles):
-        print(f"正在处理第 {i+1} 篇文章...")
-        article_keywords_and_tags = await generate_article_keywords_and_tags(article)
-        articles_keywords_and_tags.append(article_keywords_and_tags)
-        print(f"第 {i+1} 篇文章处理完成")
-    return articles_keywords_and_tags
-
-def save_to_csv(articles_keywords_and_tags: list, file_name: str):
-    """
-    将关键词和标签数据写入csv文件
-    
-    Args:
-        articles_keywords_and_tags: 关键词和标签字典列表
+        article_keywords_and_tags: 单篇文章的关键词和标签字典
+        index: 文章在列表中的索引（从0开始）
         file_name: 文件名（不包含.csv扩展名）
     """
     df = pd.read_csv(f"{file_name}.csv")
     columns = ['organizations', 'persons', 'cities_or_districts', 'other_concrete_entities', 'political_and_economic_terms', 'technical_terms', 'other_abstract_concepts', 'other_tags_of_topic_or_points']
     for column in columns:
-        df[column] = [str(article_keywords_and_tags[column]) for article_keywords_and_tags in articles_keywords_and_tags]
+        df.at[index, column] = str(article_keywords_and_tags[column])
     df.to_csv(f"{file_name}.csv", index=False, encoding='utf-8')
+
+async def generate_articles_keywords_and_tags(articles: list, file_name: str):
+    """
+    从文章内容列表中提取关键词和标签，每处理一篇文章就立即保存到CSV
+    
+    Args:
+        articles (list): 文章内容列表
+        file_name (str): 文件名（不包含.csv扩展名）
+    """
+    print(f"开始处理 {len(articles)} 篇文章")
+    for i, article in enumerate(articles):
+        print(f"正在处理第 {i+1} 篇文章...")
+        article_keywords_and_tags = await generate_article_keywords_and_tags(article)
+        article_keywords_and_tags_to_csv(article_keywords_and_tags, i, file_name)
+        print(f"第 {i+1} 篇文章处理完成并已保存")
 
 async def label_articles(file_name: str):
     """
@@ -520,10 +520,9 @@ async def label_articles(file_name: str):
         file_name (str): 文件名（不包含.csv扩展名）
     """
     articles = get_reference_text(file_name)
-    articles_keywords_and_tags = await generate_articles_keywords_and_tags(articles)
-    save_to_csv(articles_keywords_and_tags, file_name)
+    await generate_articles_keywords_and_tags(articles, file_name)
 
 
 if __name__ == "__main__":
-    asyncio.run(generate_briefs())
-    # asyncio.run(label_articles("每日经济每日金融1-10"))
+    # asyncio.run(generate_briefs())
+    asyncio.run(label_articles("测试数据/每日经济每日金融1601-1700"))
