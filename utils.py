@@ -10,11 +10,11 @@ import random
 from typing import Optional
 import importlib
 
-HYPERBOLIC_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzaXl1QHl1c2ljb25zdWx0aW5nLmNvbSIsImlhdCI6MTczOTUxNzI0NH0.LoKORpGjmaOXFwe-RvsRghmVwny_g2n1fulNdtVNNh0"
+OPENROUTER_API_KEY = "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"
 
-async def call_llm(system_message: str, user_message: str, model="deepseek-ai/DeepSeek-V3-0324", temperature=0.5, top_p=0.95, frequency_penalty=0, presence_penalty=0) -> Optional[str]:
-    api_key = HYPERBOLIC_API_KEY
-    url = "https://api.hyperbolic.xyz/v1/chat/completions"
+async def call_llm(system_message: str, user_message: str, model="deepseek/deepseek-chat-v3-0324", temperature=0.5, top_p=0.95, frequency_penalty=0, presence_penalty=0) -> Optional[str]:
+    api_key = OPENROUTER_API_KEY
+    url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"

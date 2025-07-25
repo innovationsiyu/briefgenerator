@@ -47,7 +47,7 @@ async def interpret_source_text(source_text: str) -> str:
     user_message = f"<source_text>\n{source_text}\n</source_text>"
     for attempt in range(3):
         try:
-            llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.1, 0.5, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "deepseek/deepseek-chat-v3-0324", 0.1, 0.5, 0, 0)
             if interpretation := json.loads(extract_with_xml(llm_result, "interpretation")):
                 published_date = replace_year_with_2025(interpretation.pop("新闻文章发布日期"))
                 opinion_or_requirement = interpretation.pop("分析师的观点或分析要求")    
@@ -69,51 +69,61 @@ async def draft_fact_paragraph(source_text: str, interpretation: str) -> str:
     user_message = f"<source_text>\n{source_text}\n</source_text>\n<interpretation>\n{interpretation}\n</interpretation>"
     for attempt in range(3):
         try:
-            llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.3, 0.95, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "deepseek/deepseek-chat-v3-0324", 0.3, 0.95, 0, 0)
             if fact_paragraph := extract_with_xml(llm_result, "fact_paragraph"):
                 return fact_paragraph.replace('\n', '')
         except Exception:
             pass
 
-async def review_fact_paragraph(source_text: str, fact_paragraph: str) -> str:
+async def review_fact_paragraph(source_text: str, fact_paragraph: str) -> str | None:
     """
     校对文章的事实段落
     Args:
         source_text (str): 文章内容
         fact_paragraph (str): 事实段落
     Returns:
-        str: 对事实段落的反馈
+        str | None: 如果需要修正则返回对事实段落的反馈，否则返回None
     """
     system_message = get_prompt('c_review_fact_paragraph')
     user_message = f"<source_text>\n{source_text}\n</source_text>\n<fact_paragraph>\n{fact_paragraph}\n</fact_paragraph>"
     for attempt in range(3):
         try:
-            llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.3, 0.95, 0, 0)
-            if feedback_on_fact_paragraph := extract_with_xml(llm_result, "feedback_on_fact_paragraph"):
-                return feedback_on_fact_paragraph
+            llm_result = await call_llm(system_message, user_message, "deepseek/deepseek-chat-v3-0324", 0.3, 0.95, 0, 0)
+            feedback_on_fact_paragraph, corrections_required = extract_with_xml(llm_result, ["feedback_on_fact_paragraph", "corrections_required"])
+            if feedback_on_fact_paragraph and corrections_required:
+                if "True" in corrections_required or "true" in corrections_required:
+                    return feedback_on_fact_paragraph
+                else:
+                    return None
         except Exception:
             pass
+    return None
 
-async def review_fact_sentences(source_text: str, fact_paragraph: str) -> str:
+async def review_fact_sentences(source_text: str, fact_paragraph: str) -> str | None:
     """
     校对文章的事实句子
     Args:
         source_text (str): 文章内容
         fact_paragraph (str): 事实段落
     Returns:
-        str: 对事实句子的反馈
+        str | None: 如果需要修正则返回对事实句子的反馈，否则返回None
     """
     system_message = get_prompt('d_review_fact_sentences')
     user_message = f"<source_text>\n{source_text}\n</source_text>\n<fact_sentences>\n{split_to_sentences(fact_paragraph)}\n</fact_sentences>"
     for attempt in range(3):
         try:
-            llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.3, 0.95, 0, 0)
-            if feedback_on_fact_sentences := extract_with_xml(llm_result, "feedback_on_fact_sentences"):
-                return feedback_on_fact_sentences
+            llm_result = await call_llm(system_message, user_message, "deepseek/deepseek-chat-v3-0324", 0.3, 0.95, 0, 0)
+            feedback_on_fact_sentences, corrections_required = extract_with_xml(llm_result, ["feedback_on_fact_sentences", "corrections_required"])
+            if feedback_on_fact_sentences and corrections_required:
+                if "True" in corrections_required or "true" in corrections_required:
+                    return feedback_on_fact_sentences
+                else:
+                    return None
         except Exception:
             pass
+    return None
 
-async def refine_fact_paragraph(fact_paragraph: str, feedback_on_fact_paragraph: str, feedback_on_fact_sentences: str) -> str:
+async def refine_fact_paragraph(fact_paragraph: str, feedback_on_fact_paragraph: str | None, feedback_on_fact_sentences: str | None) -> str:
     """
     修改文章的事实段落
     Args:
@@ -123,17 +133,18 @@ async def refine_fact_paragraph(fact_paragraph: str, feedback_on_fact_paragraph:
     Returns:                    
         str: 修改后的段落，如果无需修改则返回None
     """
-    if '"corrections_required": false' in feedback_on_fact_paragraph and '"corrections_required": false' in feedback_on_fact_sentences:
+    if not feedback_on_fact_paragraph and not feedback_on_fact_sentences:
         return None
     system_message = get_prompt('e_refine_fact_paragraph')
-    user_message = f"<fact_paragraph>\n{fact_paragraph}\n</fact_paragraph>" + (f"\n<feedback_on_fact_paragraph>\n{feedback_on_fact_paragraph}\n</feedback_on_fact_paragraph>" if '"corrections_required": false' not in feedback_on_fact_paragraph else "") + (f"\n<feedback_on_fact_sentences>\n{feedback_on_fact_sentences}\n</feedback_on_fact_sentences>" if '"corrections_required": false' not in feedback_on_fact_sentences else "")
+    user_message = f"<fact_paragraph>\n{fact_paragraph}\n</fact_paragraph>" + (f"\n<feedback_on_fact_paragraph>\n{feedback_on_fact_paragraph}\n</feedback_on_fact_paragraph>" if feedback_on_fact_paragraph else "") + (f"\n<feedback_on_fact_sentences>\n{feedback_on_fact_sentences}\n</feedback_on_fact_sentences>" if feedback_on_fact_sentences else "")
     for attempt in range(3):
         try:
-            llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-R1-0528", 0.1, 0.5, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "deepseek/deepseek-chat-v3-0324", 0.1, 0.5, 0, 0)
             if refined_fact_paragraph := extract_with_xml(llm_result, "refined_fact_paragraph"):
                 return refined_fact_paragraph
         except Exception:
             pass
+    return None
 
 async def draft_and_refine_fact_paragraph(source_text: str, interpretation: str) -> str:
     """
@@ -170,7 +181,7 @@ async def draft_opinion_sentences(fact_paragraph: str, source_text: str) -> str:
     user_message = f"<fact_paragraph>\n{fact_paragraph}\n</fact_paragraph>\n<source_text>\n{source_text}\n</source_text>"
     for attempt in range(3):
         try:
-            llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.6, 0.95, 0, 0.5)
+            llm_result = await call_llm(system_message, user_message, "deepseek/deepseek-chat-v3-0324", 0.6, 0.95, 0, 0.5)
             if opinion_sentences := extract_with_xml(llm_result, "opinion_sentences"):
                 return opinion_sentences
         except Exception:
@@ -188,61 +199,69 @@ async def draft_brief_title(brief_content: str) -> str:
     user_message = f"<brief_content>\n{brief_content}\n</brief_content>"
     for attempt in range(3):
         try:
-            llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.3, 0.95, 0, 0.5)
+            llm_result = await call_llm(system_message, user_message, "deepseek/deepseek-chat-v3-0324", 0.3, 0.95, 0, 0.5)
             if brief_title := extract_with_xml(llm_result, "brief_title"):
                 return brief_title
         except Exception:
             pass
 
-async def review_brief_title(brief_content: str, brief_title: str) -> str:
+async def review_brief_title(brief_content: str, brief_title: str) -> str | None:
     """
     校对文章的标题
     Args:
         brief_content (str): 简报内容
         brief_title (str): 简报标题
     Returns:
-        str: 对标题的反馈
+        str | None: 如果需要修正则返回对标题的反馈，否则返回None
     """
     system_message = get_prompt('h_review_brief_title')
     user_message = f"<brief_content>\n{brief_content}\n</brief_content>\n<brief_title>\n{brief_title}\n</brief_title>"
     for attempt in range(3):
         try:
-            llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.3, 0.95, 0, 0)
-            if feedback_on_brief_title := extract_with_xml(llm_result, "feedback_on_brief_title"):
-                if adjust_length_prompt := get_prompt('k_adjust_length', text=brief_title):
-                    if '"corrections_required": false' in feedback_on_brief_title:
-                        feedback_on_brief_title = feedback_on_brief_title.replace('"corrections_required": false', adjust_length_prompt)
+            llm_result = await call_llm(system_message, user_message, "deepseek/deepseek-chat-v3-0324", 0.3, 0.95, 0, 0)
+            feedback_on_brief_title, corrections_required = extract_with_xml(llm_result, ["feedback_on_brief_title", "corrections_required"])
+            if feedback_on_brief_title and corrections_required:
+                if "True" in corrections_required or "true" in corrections_required:
+                    if adjust_length_prompt := get_prompt('k_adjust_length', text=brief_title):
+                        print(adjust_length_prompt)
+                        return feedback_on_brief_title + adjust_length_prompt
                     else:
-                        feedback_on_brief_title = feedback_on_brief_title + adjust_length_prompt
-                    print(feedback_on_brief_title)
-                return feedback_on_brief_title
+                        return feedback_on_brief_title
+                else:
+                    if adjust_length_prompt := get_prompt('k_adjust_length', text=brief_title):
+                        print(adjust_length_prompt)
+                        return adjust_length_prompt
+                    else:
+                        return None
         except Exception:
             pass
+    return None
 
-async def refine_brief_title(brief_title: str, feedback_on_brief_title: str) -> str:
+async def refine_brief_title(brief_title: str, feedback_on_brief_title: str | None) -> str | None:
     """
     修改文章的标题
     Args:
         brief_title (str): 标题
-        feedback_on_brief_title (str): 对标题的反馈
+        feedback_on_brief_title (str | None): 对标题的反馈
     Returns:                    
-        str: 修改后的标题，如果无需修改则返回None
+        str | None: 修改后的标题，如果无需修改则返回None
     """
-    if '"corrections_required": false' in feedback_on_brief_title:
+    if not feedback_on_brief_title:
         return None
     system_message = get_prompt('i_refine_brief_title')
     user_message = f"<brief_title>\n{brief_title}\n</brief_title>\n<feedback_on_brief_title>\n{feedback_on_brief_title}\n</feedback_on_brief_title>"
     for attempt in range(3):
         try:
-            llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-R1-0528", 0.1, 0.5, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "deepseek/deepseek-chat-v3-0324", 0.1, 0.5, 0, 0)
             if refined_brief_title := extract_with_xml(llm_result, "refined_brief_title"):
                 return refined_brief_title
         except Exception:
             pass
+    return None
 
 async def draft_and_refine_brief_title(brief_content: str) -> str:
     """
-    通过“撰写-校对-修改”的循环来创建并完善标题。
+    通过"撰写-校对-修改"的循环来创建并完善标题。
     该函数首先生成一个标题草稿，然后反复进行校对和修改，
     直到校对反馈表明无需任何修改为止。
     Args:
@@ -269,7 +288,7 @@ async def get_new_article_keywords_and_tags(article: str) -> set:
         article (str): 文章内容
     Returns:
         set: 去重的关键词集合
-    """    
+    """
     system_message = get_prompt('j_generate_article_keywords_and_tags')
     user_message = f"<article>\n{article}\n</article>"
     for attempt in range(5):
@@ -280,9 +299,9 @@ async def get_new_article_keywords_and_tags(article: str) -> set:
                     keywords_and_tags["political_and_economic_terms"],
                     keywords_and_tags["technical_terms"],
                     keywords_and_tags["other_abstract_concepts"],
-                    keywords_and_tags["cities_or_districts"],
-                    keywords_and_tags["persons"],
                     keywords_and_tags["organizations"],
+                    keywords_and_tags["persons"],
+                    keywords_and_tags["cities_or_districts"],
                     keywords_and_tags["other_concrete_entities"],
                     keywords_and_tags["other_tags_of_topic_or_points"]
                 ))
@@ -307,9 +326,9 @@ def get_all_articles_keywords_and_tags(file_name: str) -> list:
                 "political_and_economic_terms": ast.literal_eval(row["political_and_economic_terms"]),
                 "technical_terms": ast.literal_eval(row["technical_terms"]),
                 "other_abstract_concepts": ast.literal_eval(row["other_abstract_concepts"]),
-                "cities_or_districts": ast.literal_eval(row["cities_or_districts"]),
-                "persons": ast.literal_eval(row["persons"]),
                 "organizations": ast.literal_eval(row["organizations"]),
+                "persons": ast.literal_eval(row["persons"]),
+                "cities_or_districts": ast.literal_eval(row["cities_or_districts"]),
                 "other_concrete_entities": ast.literal_eval(row["other_concrete_entities"]),
                 "other_tags_of_topic_or_points": ast.literal_eval(row["other_tags_of_topic_or_points"])
             })
@@ -331,9 +350,9 @@ def get_matched_articles(new_article_keywords_and_tags: set, all_articles_keywor
         "political_and_economic_terms": 1,
         "technical_terms": 1,
         "other_abstract_concepts": 1,
-        "cities_or_districts": 0.5,
-        "persons": 1,
         "organizations": 1,
+        "persons": 1,
+        "cities_or_districts": 0.5,
         "other_concrete_entities": 1,
         "other_tags_of_topic_or_points": 0.5
     }
@@ -384,7 +403,7 @@ async def translate_to_other_languages(brief_title: str, brief_content: str) -> 
     user_message = f"<chinese_title>\n{brief_title}\n</chinese_title>\n<chinese_content>\n{brief_content}\n</chinese_content>"
     for attempt in range(3):
         try:
-            llm_result = await call_llm(system_message, user_message, "deepseek-ai/DeepSeek-V3-0324", 0.1, 0.5, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "deepseek/deepseek-chat-v3-0324", 0.1, 0.5, 0, 0)
             if brief_in_other_languages := extract_with_xml(llm_result, ["english_title", "english_content", "german_title", "german_content", "french_title", "french_content", "japanese_title", "japanese_content"]):
                 return tuple(brief_in_other_languages)
         except Exception:
@@ -408,19 +427,42 @@ async def generate_briefs() -> None:
         print(f"[{file_name}] 1/6: 读取并解读原文")
         source_text = get_source_text(file_name)
         interpretation, published_date, opinion_or_requirement = await interpret_source_text(source_text)
+        
+        # 检查解读结果
+        if interpretation is None or published_date is None or opinion_or_requirement is None:
+            print(f"[{file_name}] 错误: 文章解读失败，跳过处理")
+            return
+        
         interpretation = convert_to_date(interpretation, published_date)
         source_text = convert_to_cn_term(source_text)
         source_text = clean_stock_codes(source_text)
         source_text = convert_to_date(source_text, published_date)
         print(f"[{file_name}] 2/6: 创建并完善事实段落")
         fact_paragraph = await draft_and_refine_fact_paragraph(source_text, interpretation)
+        
+        # 检查事实段落
+        if fact_paragraph is None:
+            print(f"[{file_name}] 错误: 事实段落生成失败，跳过处理")
+            return
+        
         fact_paragraph = remove_year_at_start(fact_paragraph)
         print(f"[{file_name}] 3/6: 撰写观点句")
-        source_text = f"{source_text}\n\n{opinion_or_requirement}"
-        opinion_sentences = await draft_opinion_sentences(fact_paragraph, source_text)
+        opinion_sentences = await draft_opinion_sentences(fact_paragraph, f"{source_text}\n\n{opinion_or_requirement}")
+        
+        # 检查观点句子
+        if opinion_sentences is None:
+            print(f"[{file_name}] 警告: 观点句子生成失败，使用空字符串")
+            opinion_sentences = ""
+        
         print(f"[{file_name}] 4/6: 创建并完善标题")
         brief_content = f"{fact_paragraph}{opinion_sentences}"
         brief_title = await draft_and_refine_brief_title(brief_content)
+        
+        # 检查标题
+        if brief_title is None:
+            print(f"[{file_name}] 警告: 标题生成失败，使用默认标题")
+            brief_title = "简报标题生成失败"
+        
         save_as_txt(f"{brief_title}\n\n{brief_content}", file_name)
         """
         print(f"[{file_name}] 5/6: 匹配历史文章")
@@ -435,7 +477,6 @@ async def generate_briefs() -> None:
         await asyncio.gather(*[generate_brief(file_name) for file_name in file_names])
         print(f"所有 {len(file_names)} 个文件处理完成")
     return None
-
 
 def get_reference_text(file_name: str) -> list:
     """
@@ -454,9 +495,9 @@ def get_reference_text(file_name: str) -> list:
                 "political_and_economic_terms",
                 "technical_terms", 
                 "other_abstract_concepts",
-                "cities_or_districts",
-                "persons",
                 "organizations",
+                "persons",
+                "cities_or_districts",
                 "other_concrete_entities",
                 "other_tags_of_topic_or_points"
             ])
@@ -481,9 +522,9 @@ async def generate_article_keywords_and_tags(article: str) -> dict:
                     "political_and_economic_terms",
                     "technical_terms", 
                     "other_abstract_concepts",
-                    "cities_or_districts",
-                    "persons",
                     "organizations",
+                    "persons",
+                    "cities_or_districts",
                     "other_concrete_entities",
                     "other_tags_of_topic_or_points"
                 ]):
@@ -494,9 +535,9 @@ async def generate_article_keywords_and_tags(article: str) -> dict:
         "political_and_economic_terms": "",
         "technical_terms": "",
         "other_abstract_concepts": "",
-        "cities_or_districts": "",
-        "persons": "",
         "organizations": "",
+        "persons": "",
+        "cities_or_districts": "",
         "other_concrete_entities": "",
         "other_tags_of_topic_or_points": ""
     }
@@ -512,6 +553,7 @@ def article_keywords_and_tags_to_csv(index: int, article_keywords_and_tags: dict
     """
     df = pd.read_csv(f"{file_name}.csv")
     for column in ['organizations', 'persons', 'cities_or_districts', 'other_concrete_entities', 'political_and_economic_terms', 'technical_terms', 'other_abstract_concepts', 'other_tags_of_topic_or_points']:
+        df[column] = df[column].astype(str)
         df.at[index, column] = str(article_keywords_and_tags[column])
     df.to_csv(f"{file_name}.csv", index=False, encoding='utf-8')
 
@@ -531,5 +573,5 @@ async def label_articles(file_name: str):
         print(f"索引 {i} 的文章处理完成并已保存")
 
 if __name__ == "__main__":
-    # asyncio.run(generate_briefs())
-    asyncio.run(label_articles("测试数据/每日经济每日金融1701-1800"))
+    asyncio.run(generate_briefs())
+    # asyncio.run(label_articles("测试数据/每日经济每日金融83001-83100"))
