@@ -235,7 +235,7 @@ async def refine_brief_title(brief_title: str, feedback_on_brief_title: str | No
     user_message = f"<brief_title>\n{brief_title}\n</brief_title>\n<feedback_on_brief_title>\n{feedback_on_brief_title}\n</feedback_on_brief_title>"
     for attempt in range(5):
         try:
-            llm_result = await call_llm(system_message, user_message, "qwen/qwen3-235b-a22b-2507", 0.1, 0.5, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "qwen/qwen3-235b-a22b-thinking-2507", 0.1, 0.5, 0, 0)
             if refined_brief_title := extract_with_xml(llm_result, "refined_brief_title"):
                 return refined_brief_title
         except Exception:

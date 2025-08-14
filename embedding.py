@@ -180,6 +180,7 @@ def get_similar_tags(query: str, top_n: int = 100) -> set:
     faiss.normalize_L2(query_array)
     distances, indices = ann_data["index"].search(query_array, top_n)
     similar_tags = [ann_data["tags"][i] for i in indices[0]]
+    print(similar_tags)
     return set(similar_tags)
 
 if __name__ == "__main__":

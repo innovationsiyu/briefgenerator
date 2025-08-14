@@ -10,7 +10,7 @@ import random
 from typing import Optional
 import importlib
 
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = ""
 
 async def call_llm(system_message: str, user_message: str, model="openai/gpt-oss-120b", temperature=0.5, top_p=0.95, frequency_penalty=0, presence_penalty=0) -> Optional[str]:
     api_key = OPENROUTER_API_KEY
