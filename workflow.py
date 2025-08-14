@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import re
 import csv
 import json
 import ast
@@ -69,7 +70,7 @@ async def draft_brief_content(source_text: str, interpretation: str, article_con
     user_message = f"<source_text>\n{source_text}\n</source_text>\n<interpretation>\n{interpretation}\n</interpretation>"
     for attempt in range(5):
         try:
-            llm_result = await call_llm(system_message, user_message, "openai/gpt-oss-120b", 0.3, 0.95, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "qwen/qwen3-235b-a22b-2507", 0.3, 0.95, 0, 0)
             if brief_content := extract_with_xml(llm_result, "brief_content"):
                 return brief_content.replace('\n', '')
         except Exception:
@@ -139,7 +140,7 @@ async def refine_brief_content(brief_content: str, feedback_on_brief_content: st
     user_message = f"<brief_content>\n{brief_content}\n</brief_content>" + (f"\n<feedback_on_brief_content>\n{feedback_on_brief_content}\n</feedback_on_brief_content>" if feedback_on_brief_content else "") + (f"\n<feedback_on_brief_sentences>\n{feedback_on_brief_sentences}\n</feedback_on_brief_sentences>" if feedback_on_brief_sentences else "")
     for attempt in range(5):
         try:
-            llm_result = await call_llm(system_message, user_message, "openai/gpt-oss-120b", 0.1, 0.5, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "qwen/qwen3-235b-a22b-2507", 0.1, 0.5, 0, 0)
             if refined_brief_content := extract_with_xml(llm_result, "refined_brief_content"):
                 return refined_brief_content
         except Exception:
@@ -181,7 +182,7 @@ async def draft_brief_title(brief_content: str, article_titles: str) -> str:
     user_message = f"<brief_content>\n{brief_content}\n</brief_content>"
     for attempt in range(5):
         try:
-            llm_result = await call_llm(system_message, user_message, "openai/gpt-oss-120b", 0.3, 0.95, 0, 0.5)
+            llm_result = await call_llm(system_message, user_message, "qwen/qwen3-235b-a22b-2507", 0.3, 0.95, 0, 0.5)
             if brief_title := extract_with_xml(llm_result, "brief_title"):
                 return brief_title
         except Exception:
@@ -234,7 +235,7 @@ async def refine_brief_title(brief_title: str, feedback_on_brief_title: str | No
     user_message = f"<brief_title>\n{brief_title}\n</brief_title>\n<feedback_on_brief_title>\n{feedback_on_brief_title}\n</feedback_on_brief_title>"
     for attempt in range(5):
         try:
-            llm_result = await call_llm(system_message, user_message, "openai/gpt-oss-120b", 0.1, 0.5, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "qwen/qwen3-235b-a22b-2507", 0.1, 0.5, 0, 0)
             if refined_brief_title := extract_with_xml(llm_result, "refined_brief_title"):
                 return refined_brief_title
         except Exception:
@@ -310,7 +311,7 @@ def get_matched_articles(new_keywords_and_tags: set, all_keywords_and_tags: list
         "other_tags_of_topic_or_points": 1
     }
     id_and_score_tuples = [(keywords_and_tags["DataID"], sum(len(new_keywords_and_tags.intersection(set(keywords_and_tags[aspect]))) * weight for aspect, weight in weights.items())) for keywords_and_tags in all_keywords_and_tags]
-    id_to_score = {id: score for id, score in id_and_score_tuples if score > 2}
+    id_to_score = {id: score for id, score in id_and_score_tuples if score > 1}
     results = []
     with open(f"{file_name}.csv", 'r', encoding='utf-8') as file:
         for row in csv.DictReader(file):
@@ -319,6 +320,7 @@ def get_matched_articles(new_keywords_and_tags: set, all_keywords_and_tags: list
                     "DataID": row["DataID"],
                     "InfoTitle": row["InfoTitle"],
                     "InfoContent": row["InfoContent"],
+                    "ProductDate": row["ProductDate"],
                     "score": id_to_score[row["DataID"]]
                 })
     results.sort(key=lambda x: x["score"], reverse=True)
@@ -386,14 +388,14 @@ async def generate_briefs() -> None:
         source_text = convert_to_date(source_text, published_date)
         print(f"[{file_name}] 2/6: 匹配历史文章")
         articles = await match_articles(key_points, "reference_text")
-        article_contents = "\n\n".join([article['InfoContent'] for article in articles[:3]])
+        article_contents = "\n\n".join([re.sub(r'（[A-Za-z]+）$', '', article['InfoContent']).strip() for article in articles[:3]])
         article_titles = "\n\n".join([(article['InfoTitle'].split('：', 1)[1].strip() if '：' in article['InfoTitle'] else article['InfoTitle']) for article in articles])
         print(f"[{file_name}] 3/6: 创建并完善简报内容")
         brief_content = await draft_and_refine_brief_content(source_text, interpretation, article_contents)
         brief_content = remove_year_at_start(brief_content)
         print(f"[{file_name}] 5/6: 创建并完善简报标题")
         brief_title = await draft_and_refine_brief_title(brief_content, article_titles)
-        save_as_txt(f"{brief_title}\n{brief_content}\n\n{"\n\n".join([f"{article['InfoTitle']}\n{article['InfoContent']}" for article in articles])}", f"{file_name} with matched briefs")
+        save_as_txt(f"{brief_title}\n{brief_content}\n\n{"\n\n".join([f"{article['InfoTitle']}\n{article['InfoContent']}\n{article['ProductDate']}" for article in articles])}", f"{file_name} with matched briefs")
         # print(f"[{file_name}] 6/6: 翻译为其它语言")
         # english_title, english_content, german_title, german_content, french_title, french_content, japanese_title, japanese_content = await translate_to_other_languages(brief_title, brief_content)
         # save_as_txt(f"{brief_title}\n{brief_content}\n\n{english_title}\n{english_content}\n\n{german_title}\n{german_content}\n\n{french_title}\n{french_content}\n\n{japanese_title}\n{japanese_content}", f"{file_name} with other language versions")
@@ -407,23 +409,25 @@ if __name__ == "__main__":
     asyncio.run(generate_briefs())
 """
     # 定义测试用的简报内容
-    brief = "ChatGPT使用的是基于GPT-3.5并通过人类反馈强化学习（RLHF）方法训练得到的对话式模型。ChatGPT能够在对话中回答追问的问题、承认错误、质疑不正确的前提并拒绝不当请求。ChatGPT存在有时会写出看似合理却不正确或荒谬的答案、对输入措辞的微调很敏感、以及回答过于冗长等局限性。"
+    query = "中国的国内生产总值GDP保持快速增长，但居民感受到的获得感并不明显，原因分析"
     # 测试文件名
-    file_name = "reference_text"
+    file_name = "分析专栏2021-07至2025-06"
     print("开始测试match_articles函数...")
-    print(f"测试简报内容长度: {len(brief)} 字符")
+    print(f"测试简报内容长度: {len(query)} 字符")
     print(f"匹配数据文件: {file_name}.csv")
     # 使用asyncio.run()运行异步函数
-    articles = asyncio.run(match_articles(brief, file_name))
+    articles = asyncio.run(match_articles(query, file_name))
     print(f"\n匹配到 {len(articles)} 篇相关文章")
     # 显示前5篇匹配文章的信息
     for i, article in enumerate(articles[:5], 1):
         print(f"\n第{i}篇匹配文章 (得分: {article['score']}):")
         print(f"{article['InfoTitle']}")
         print(f"{article['InfoContent']}")
-    # 匹配历史文章
-    articles = "\n\n\n\n".join([f"{article['InfoTitle']}\n\n{article['InfoContent']}" for article in articles])
-    # 保存匹配文章
-    save_as_txt(f"{brief}\n\n{articles}", f"test_match_articles_result4")
-    print(f"\n测试完成！匹配结果已保存。")
+    csv_path = "outputs/GDP与体感差异分析文章2021-07至2025-06.csv"
+    with open(csv_path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["InfoTitle", "InfoContent", "ProductDate"])
+        for article in articles:
+            writer.writerow([article["InfoTitle"], article["InfoContent"], article["ProductDate"]])
+    print(f"\n测试完成！匹配结果已保存到: {csv_path}")
 """
