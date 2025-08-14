@@ -47,7 +47,7 @@ async def interpret_source_text(source_text: str) -> str:
     user_message = f"<source_text>\n{source_text}\n</source_text>"
     for attempt in range(5):
         try:
-            llm_result = await call_llm(system_message, user_message, "openai/gpt-oss-120b", 0.1, 0.5, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "openai/gpt-5-mini", 0.1, 0.5, 0, 0)
             if interpretation := json.loads(extract_with_xml(llm_result, "interpretation")):
                 key_points = "\n".join(interpretation["关键要点提炼"])
                 published_date = replace_year_with_2025(interpretation.pop("新闻文章发布日期"))
@@ -89,7 +89,7 @@ async def review_brief_content(source_text: str, brief_content: str) -> str | No
     user_message = f"<source_text>\n{source_text}\n</source_text>\n<brief_content>\n{brief_content}\n</brief_content>"
     for attempt in range(5):
         try:
-            llm_result = await call_llm(system_message, user_message, "openai/gpt-oss-120b", 0.3, 0.95, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "qwen/qwen3-235b-a22b-2507", 0.3, 0.95, 0, 0)
             feedback_on_brief_content, corrections_required = extract_with_xml(llm_result, ["feedback_on_brief_content", "corrections_required"])
             if feedback_on_brief_content and corrections_required:
                 if "True" in corrections_required or "true" in corrections_required:
@@ -113,7 +113,7 @@ async def review_brief_sentences(source_text: str, brief_content: str) -> str | 
     user_message = f"<source_text>\n{source_text}\n</source_text>\n<brief_sentences>\n{split_to_sentences(brief_content)}\n</brief_sentences>"
     for attempt in range(5):
         try:
-            llm_result = await call_llm(system_message, user_message, "openai/gpt-oss-120b", 0.3, 0.95, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "qwen/qwen3-235b-a22b-2507", 0.3, 0.95, 0, 0)
             feedback_on_brief_sentences, corrections_required = extract_with_xml(llm_result, ["feedback_on_brief_sentences", "corrections_required"])
             if feedback_on_brief_sentences and corrections_required:
                 if "True" in corrections_required or "true" in corrections_required:
@@ -201,7 +201,7 @@ async def review_brief_title(brief_content: str, brief_title: str) -> str | None
     user_message = f"<brief_content>\n{brief_content}\n</brief_content>\n<brief_title>\n{brief_title}\n</brief_title>"
     for attempt in range(5):
         try:
-            llm_result = await call_llm(system_message, user_message, "openai/gpt-oss-120b", 0.3, 0.95, 0, 0)
+            llm_result = await call_llm(system_message, user_message, "qwen/qwen3-235b-a22b-2507", 0.3, 0.95, 0, 0)
             feedback_on_brief_title, corrections_required = extract_with_xml(llm_result, ["feedback_on_brief_title", "corrections_required"])
             if feedback_on_brief_title and corrections_required:
                 if "True" in corrections_required or "true" in corrections_required:
