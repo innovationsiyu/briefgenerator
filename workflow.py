@@ -199,23 +199,18 @@ async def review_brief_title(brief_content: str, brief_title: str) -> str | None
     """
     system_message = get_prompt('h_review_brief_title')
     user_message = f"<brief_content>\n{brief_content}\n</brief_content>\n<brief_title>\n{brief_title}\n</brief_title>"
+    adjust_length_prompt = get_prompt('k_adjust_length', text=brief_title)
     for attempt in range(5):
         try:
             llm_result = await call_llm(system_message, user_message, "qwen/qwen3-235b-a22b-2507", 0.3, 0.95, 0, 0)
             feedback_on_brief_title, corrections_required = extract_with_xml(llm_result, ["feedback_on_brief_title", "corrections_required"])
             if feedback_on_brief_title and corrections_required:
                 if "True" in corrections_required or "true" in corrections_required:
-                    if adjust_length_prompt := get_prompt('k_adjust_length', text=brief_title):
-                        print(adjust_length_prompt)
-                        return feedback_on_brief_title + adjust_length_prompt
-                    else:
-                        return feedback_on_brief_title
+                    return feedback_on_brief_title + adjust_length_prompt
+                elif adjust_length_prompt:
+                    return adjust_length_prompt
                 else:
-                    if adjust_length_prompt := get_prompt('k_adjust_length', text=brief_title):
-                        print(adjust_length_prompt)
-                        return adjust_length_prompt
-                    else:
-                        return None
+                    return None
         except Exception:
             pass
     return None
@@ -257,6 +252,8 @@ async def draft_and_refine_brief_title(brief_content: str, article_titles: str) 
         feedback_on_brief_title = await review_brief_title(brief_content, brief_title)
         refined_brief_title = await refine_brief_title(brief_title, feedback_on_brief_title)
         if refined_brief_title is None:
+            if get_prompt('k_adjust_length', text=brief_title):
+                continue
             print("标题校对完成，无需进一步修改。")
             return brief_title
         else:
@@ -409,9 +406,9 @@ if __name__ == "__main__":
     asyncio.run(generate_briefs())
 """
     # 定义测试用的简报内容
-    query = "中国的国内生产总值GDP保持快速增长，但居民感受到的获得感并不明显，原因分析"
+    query = "京津冀协同"
     # 测试文件名
-    file_name = "分析专栏2021-07至2025-06"
+    file_name = "reference_text"
     print("开始测试match_articles函数...")
     print(f"测试简报内容长度: {len(query)} 字符")
     print(f"匹配数据文件: {file_name}.csv")
@@ -423,7 +420,7 @@ if __name__ == "__main__":
         print(f"\n第{i}篇匹配文章 (得分: {article['score']}):")
         print(f"{article['InfoTitle']}")
         print(f"{article['InfoContent']}")
-    csv_path = "outputs/GDP与体感差异分析文章2021-07至2025-06.csv"
+    csv_path = "outputs/测试模糊搜索.csv"
     with open(csv_path, "w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["InfoTitle", "InfoContent", "ProductDate"])
